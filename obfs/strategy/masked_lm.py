@@ -1,14 +1,22 @@
 import random
 from copy import deepcopy
+from typing import Optional
 
 import torch
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
-def random_mask_test(text: str, tokenizer: AutoTokenizer, model: AutoModelForMaskedLM):
+def random_mask_test(
+    text: str,
+    tokenizer: AutoTokenizer,
+    model: AutoModelForMaskedLM,
+    seed: Optional[int] = None,
+):
     inputs = tokenizer.encode_plus(text, return_tensors="pt")
     # randomly select a token to mask
     masked_inputs = deepcopy(inputs)
+    if seed:
+        random.seed(seed)
     masked_pos = random.randint(0, len(inputs.input_ids[0]) - 1)
     masked_inputs.input_ids[0, masked_pos] = tokenizer.mask_token_id
     masked_text = tokenizer.decode(masked_inputs.input_ids[0])
@@ -42,3 +50,37 @@ def random_mask_test(text: str, tokenizer: AutoTokenizer, model: AutoModelForMas
     top_k_probs = normalized_probs.topk(top_k).values
     print(f"top_k_probs: {top_k_probs}")
     return top_k_probs
+
+
+def random_mask_perplexity(
+    text: str,
+    tokenizer: AutoTokenizer,
+    model: AutoModelForMaskedLM,
+    debug: bool = False,
+    seed: Optional[int] = None,
+):
+    inputs = tokenizer.encode_plus(text, return_tensors="pt")
+    # randomly select a token to mask
+    masked_inputs = deepcopy(inputs)
+    if seed:
+        random.seed(seed)
+    masked_pos = random.randint(0, len(inputs.input_ids[0]) - 1)
+    masked_inputs.input_ids[0, masked_pos] = tokenizer.mask_token_id
+
+    with torch.no_grad():
+        outputs = model(**masked_inputs, labels=masked_inputs.input_ids)
+        # NOTE: code under the hood
+        # masked_lm_loss = None
+        # if labels is not None:
+        #     loss_fct = CrossEntropyLoss()  # -100 index = padding token
+        #     masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+
+    loss = outputs.loss
+    perplexity = torch.exp(loss)
+
+    if debug:
+        masked_text = tokenizer.decode(masked_inputs.input_ids[0])
+        print(f"original: {tokenizer.decode(inputs.input_ids[0])}")
+        print(f"masked: {masked_text}")
+
+    return perplexity.item()
