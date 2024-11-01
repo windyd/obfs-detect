@@ -51,7 +51,7 @@ def perplexity_hf(text, model, tokenizer, stride: int = 250):
         input_ids = encodings.input_ids[:, begin_loc:end_loc]
 
         target_ids = input_ids.clone()
-        target_ids[:, :-trg_len] = -100  # pad
+        target_ids[:, :-trg_len] = -100  # ignore indices
 
         with torch.no_grad():
             outputs = model(input_ids, labels=target_ids)
